@@ -29,15 +29,32 @@ public class ClickEvent {
     @Column(nullable = false)
     private String browser;
 
+    @Column
+    private String device;
+
+    @Column
+    private String operatingSystem;
+
+    @Column
+    private String visitorKey;
+
     protected ClickEvent() {
         // required by JPA
     }
 
     public ClickEvent(String shortCode, Instant clickedAt, String country, String browser) {
+        this(shortCode, clickedAt, country, browser, "Unknown", "Unknown", "Unknown");
+    }
+
+    public ClickEvent(String shortCode, Instant clickedAt, String country, String browser,
+                      String device, String operatingSystem, String visitorKey) {
         this.shortCode = shortCode;
         this.clickedAt = clickedAt;
         this.country = country;
         this.browser = browser;
+        this.device = device;
+        this.operatingSystem = operatingSystem;
+        this.visitorKey = visitorKey;
     }
 
     public Long getId() {
@@ -58,5 +75,17 @@ public class ClickEvent {
 
     public String getBrowser() {
         return browser;
+    }
+
+    public String getDevice() {
+        return device;
+    }
+
+    public String getOperatingSystem() {
+        return operatingSystem;
+    }
+
+    public String getVisitorKey() {
+        return visitorKey;
     }
 }

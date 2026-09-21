@@ -46,7 +46,7 @@ class RedirectControllerTest {
                 .andExpect(header().string("Location", "https://example.com/page"));
 
         verify(clickEventRecorder).recordClickEvent(eq("abc1234"), any(Instant.class), eq("IN"),
-                eq("Mozilla/5.0 Chrome/120.0.0.0 Safari/537.36"));
+                eq("Mozilla/5.0 Chrome/120.0.0.0 Safari/537.36"), eq("127.0.0.1"));
     }
 
     @Test
@@ -58,7 +58,7 @@ class RedirectControllerTest {
                 .andExpect(status().isFound());
 
         verify(clickEventRecorder).recordClickEvent(eq("abc1234"), any(Instant.class), isNull(),
-                eq("Firefox/121.0"));
+                eq("Firefox/121.0"), eq("127.0.0.1"));
     }
 
     @Test
@@ -70,7 +70,7 @@ class RedirectControllerTest {
                 .andExpect(status().isNotFound());
 
         verify(clickEventRecorder, never()).recordClickEvent(anyString(), any(Instant.class), anyString(),
-                anyString());
+                anyString(), anyString());
     }
 
     @Test
@@ -82,6 +82,6 @@ class RedirectControllerTest {
                 .andExpect(status().isGone());
 
         verify(clickEventRecorder, never()).recordClickEvent(anyString(), any(Instant.class), anyString(),
-                anyString());
+                anyString(), anyString());
     }
 }

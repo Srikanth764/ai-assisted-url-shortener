@@ -1,8 +1,9 @@
 package com.assignment.urlshortener.service;
 
-import com.assignment.urlshortener.cache.RedirectCache;
 import com.assignment.urlshortener.dto.CreateShortUrlRequest;
 import com.assignment.urlshortener.dto.CreateShortUrlResponse;
+import com.assignment.urlshortener.dto.ManagedUrlResponse;
+import com.assignment.urlshortener.dto.UpdateShortUrlRequest;
 import com.assignment.urlshortener.dto.UrlAnalyticsResponse;
 import com.assignment.urlshortener.entity.ShortUrl;
 import com.assignment.urlshortener.exception.CustomAliasConflictException;
@@ -22,6 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class UrlShortenerService {
@@ -33,16 +36,13 @@ public class UrlShortenerService {
 
     private final ShortUrlRepository shortUrlRepository;
     private final ShortCodeGenerator shortCodeGenerator;
-    private final RedirectCache redirectCache;
     private final String baseUrl;
 
     public UrlShortenerService(ShortUrlRepository shortUrlRepository,
                                 ShortCodeGenerator shortCodeGenerator,
-                                RedirectCache redirectCache,
                                 @Value("${app.base-url}") String baseUrl) {
         this.shortUrlRepository = shortUrlRepository;
         this.shortCodeGenerator = shortCodeGenerator;
-        this.redirectCache = redirectCache;
         this.baseUrl = baseUrl;
     }
 
@@ -71,15 +71,6 @@ public class UrlShortenerService {
 
     @Transactional
     public String resolveOriginalUrl(String shortCode) {
-        Optional<String> cachedUrl = redirectCache.getOriginalUrl(shortCode);
-        if (cachedUrl.isPresent()) {
-            int updated = shortUrlRepository.incrementClickCount(shortCode, Instant.now());
-            if (updated == 1) {
-                return cachedUrl.get();
-            }
-            redirectCache.evict(shortCode);
-        }
-
         ShortUrl shortUrl = shortUrlRepository.findByShortCode(shortCode)
                 .filter(ShortUrl::isActive)
                 .orElseThrow(() -> {
@@ -93,7 +84,6 @@ public class UrlShortenerService {
         }
 
         shortUrlRepository.incrementClickCount(shortCode, Instant.now());
-        redirectCache.put(shortCode, shortUrl.getOriginalUrl(), shortUrl.getExpiresAt());
         return shortUrl.getOriginalUrl();
     }
 
@@ -116,6 +106,20 @@ public class UrlShortenerService {
         );
     }
 
+        @Transactional(readOnly = true)
+        public List<ManagedUrlResponse> getManagedUrls() {
+        return shortUrlRepository.findAll().stream()
+            .map(shortUrl -> new ManagedUrlResponse(
+                shortUrl.getShortCode(),
+                buildShortUrl(shortUrl.getShortCode()),
+                shortUrl.getOriginalUrl(),
+                shortUrl.getClickCount(),
+                shortUrl.getCreatedAt(),
+                shortUrl.getExpiresAt(),
+                shortUrl.isActive()))
+            .collect(Collectors.toList());
+        }
+
     @Transactional
     public void deactivateShortUrl(String shortCode) {
         ShortUrl shortUrl = shortUrlRepository.findByShortCode(shortCode)
@@ -131,9 +135,25 @@ public class UrlShortenerService {
 
         shortUrl.deactivate();
         shortUrlRepository.save(shortUrl);
-        redirectCache.evict(shortCode);
 
         log.info("Deactivated short URL with code {}", shortCode);
+    }
+
+    @Transactional
+    public void deleteShortUrl(String shortCode) {
+        ShortUrl shortUrl = shortUrlRepository.findByShortCode(shortCode)
+                .orElseThrow(() -> new ShortUrlNotFoundException(shortCode));
+        shortUrlRepository.delete(shortUrl);
+        log.info("Deleted short URL with code {}", shortCode);
+    }
+
+    @Transactional
+    public void updateShortUrl(String shortCode, UpdateShortUrlRequest request) {
+        ShortUrl shortUrl = shortUrlRepository.findByShortCode(shortCode)
+                .orElseThrow(() -> new ShortUrlNotFoundException(shortCode));
+        shortUrl.updateDestination(request.originalUrl(), request.expiresAt());
+        shortUrlRepository.save(shortUrl);
+        log.info("Updated short URL with code {}", shortCode);
     }
 
     private String reserveCustomAlias(String alias) {

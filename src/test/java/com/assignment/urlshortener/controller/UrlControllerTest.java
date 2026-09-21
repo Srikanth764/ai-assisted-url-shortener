@@ -2,6 +2,7 @@ package com.assignment.urlshortener.controller;
 
 import com.assignment.urlshortener.dto.ClickAnalyticsResponse;
 import com.assignment.urlshortener.dto.CreateShortUrlResponse;
+import com.assignment.urlshortener.dto.ManagedUrlResponse;
 import com.assignment.urlshortener.exception.CustomAliasConflictException;
 import com.assignment.urlshortener.exception.ShortUrlNotFoundException;
 import com.assignment.urlshortener.service.ClickAnalyticsService;
@@ -24,6 +25,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -49,6 +51,18 @@ class UrlControllerTest {
                         .content("{\"originalUrl\":\"https://example.com/page\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.shortCode").value("abc1234"));
+    }
+
+    @Test
+    void getManagedUrlsReturnsLinkSummaries() throws Exception {
+        when(urlShortenerService.getManagedUrls()).thenReturn(java.util.List.of(
+                new ManagedUrlResponse("abc1234", "http://short.ly/abc1234", "https://example.com/page",
+                        2L, Instant.now(), null, true)));
+
+        mockMvc.perform(get("/api/v1/urls"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].shortCode").value("abc1234"))
+                .andExpect(jsonPath("$[0].active").value(true));
     }
 
     @Test
@@ -144,4 +158,22 @@ class UrlControllerTest {
         mockMvc.perform(delete("/api/v1/urls/{shortCode}", "missing"))
                 .andExpect(status().isNotFound());
     }
+
+        @Test
+        void updateShortUrlReturnsNoContent() throws Exception {
+                mockMvc.perform(put("/api/v1/urls/{shortCode}", "abc1234")
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content("{\"originalUrl\":\"https://example.com/updated\"}"))
+                                .andExpect(status().isNoContent());
+
+                verify(urlShortenerService).updateShortUrl(anyString(), any());
+        }
+
+        @Test
+        void permanentlyDeleteShortUrlReturnsNoContent() throws Exception {
+                mockMvc.perform(delete("/api/v1/urls/{shortCode}/permanent", "abc1234"))
+                                .andExpect(status().isNoContent());
+
+                verify(urlShortenerService).deleteShortUrl("abc1234");
+        }
 }

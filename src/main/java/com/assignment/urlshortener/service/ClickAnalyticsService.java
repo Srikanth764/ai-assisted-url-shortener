@@ -31,14 +31,23 @@ public class ClickAnalyticsService {
 
         long totalEvents = clickEventRepository.countByShortCode(shortCode);
         Map<String, Long> byBrowser = toMap(clickEventRepository.countByBrowserForShortCode(shortCode));
+        long uniqueVisitors = clickEventRepository.countUniqueVisitors(shortCode);
+        Map<String, Long> byDevice = toMap(clickEventRepository.countByDeviceForShortCode(shortCode));
+        Map<String, Long> byOperatingSystem = toMap(clickEventRepository.countByOperatingSystemForShortCode(shortCode));
+        Map<String, Long> byCountry = toMap(clickEventRepository.countByCountryForShortCode(shortCode));
 
-        return new ClickAnalyticsResponse(shortCode, totalEvents, byBrowser);
+        return new ClickAnalyticsResponse(shortCode, totalEvents, uniqueVisitors, byBrowser,
+            byDevice, byOperatingSystem, byCountry);
     }
 
     private Map<String, Long> toMap(List<GroupCount> groupCounts) {
         Map<String, Long> result = new LinkedHashMap<>();
+        if (groupCounts == null) {
+            return result;
+        }
         for (GroupCount groupCount : groupCounts) {
-            result.put(groupCount.getName(), groupCount.getTotal());
+            String name = groupCount.getName() == null ? "Unknown" : groupCount.getName();
+            result.put(name, groupCount.getTotal());
         }
         return result;
     }

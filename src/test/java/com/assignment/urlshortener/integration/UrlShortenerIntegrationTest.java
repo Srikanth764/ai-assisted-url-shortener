@@ -171,32 +171,18 @@ class UrlShortenerIntegrationTest {
     }
 
     @Test
-    void createShortUrlWithSqlInjectionStyleOriginalUrlPersistsLiterallyAndDoesNotAffectOtherRecords()
+    void createShortUrlWithSqlInjectionStyleOriginalUrlIsRejected()
             throws Exception {
         String maliciousUrl = "https://example.com/search?id=1'OR'1'='1';DROP;--";
         long countBefore = shortUrlRepository.count();
 
-        MvcResult createResult = mockMvc.perform(post("/api/v1/urls")
+        mockMvc.perform(post("/api/v1/urls")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
                                 new CreateShortUrlRequest(maliciousUrl, null, null))))
-                .andExpect(status().isCreated())
-                .andReturn();
+                .andExpect(status().isBadRequest());
 
-        assertThat(shortUrlRepository.count()).isEqualTo(countBefore + 1);
-
-        CreateShortUrlResponse createResponse = objectMapper.readValue(
-                createResult.getResponse().getContentAsString(), CreateShortUrlResponse.class);
-        String shortCode = createResponse.shortCode();
-
-        ShortUrl stored = shortUrlRepository.findByShortCode(shortCode).orElseThrow();
-        assertThat(stored.getOriginalUrl()).isEqualTo(maliciousUrl);
-
-        mockMvc.perform(get("/{shortCode}", shortCode))
-                .andExpect(status().isFound())
-                .andExpect(header().string(HttpHeaders.LOCATION, maliciousUrl));
-
-        assertThat(shortUrlRepository.count()).isEqualTo(countBefore + 1);
+        assertThat(shortUrlRepository.count()).isEqualTo(countBefore);
     }
 
     @Test

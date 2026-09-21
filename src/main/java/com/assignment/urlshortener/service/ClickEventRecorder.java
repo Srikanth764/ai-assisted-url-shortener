@@ -25,12 +25,22 @@ public class ClickEventRecorder {
     @Async
     @Transactional
     public void recordClickEvent(String shortCode, Instant clickedAt, String countryHeaderValue, String userAgent) {
+        recordClickEvent(shortCode, clickedAt, countryHeaderValue, userAgent, "Unknown");
+    }
+
+    @Async
+    @Transactional
+    public void recordClickEvent(String shortCode, Instant clickedAt, String countryHeaderValue,
+                                 String userAgent, String visitorKey) {
         try {
             String country = (countryHeaderValue == null || countryHeaderValue.isBlank())
                     ? "Unknown"
                     : countryHeaderValue;
             String browser = BrowserDetector.detect(userAgent);
-            clickEventRepository.save(new ClickEvent(shortCode, clickedAt, country, browser));
+                String device = BrowserDetector.detectDevice(userAgent);
+                String operatingSystem = BrowserDetector.detectOperatingSystem(userAgent);
+                clickEventRepository.save(new ClickEvent(shortCode, clickedAt, country, browser,
+                    device, operatingSystem, visitorKey));
         } catch (Exception ex) {
             log.warn("Failed to persist click event for {}: {}", shortCode, ex.getMessage());
         }

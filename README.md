@@ -79,47 +79,37 @@ public short code.
 - Return structured API errors
 - Provide a static browser interface
 - Use H2 for local and standalone execution
-- Use PostgreSQL and Redis in the scalable deployment
-- Run two Spring Boot instances behind NGINX
-- Fall back to PostgreSQL when Redis is unavailable
+- Use a file-backed H2 database for local persistence
+- List, search, edit, disable, and delete links from the browser interface
 - Expose Actuator health and `X-App-Instance`
-- Include automated tests and k6 performance-test assets
+- Include automated tests
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    U["Browser UI / REST Client"] --> N["NGINX :8080"]
-    N --> A1["Spring Boot app1"]
-    N --> A2["Spring Boot app2"]
-    A1 --> R[("Redis")]
-    A2 --> R
-    A1 --> P[("PostgreSQL")]
-    A2 --> P
-    A1 --> E["Async Click Recorder"]
-    A2 --> E
-    E --> P
+    U["Browser UI / REST Client"] --> A["Spring Boot application"]
+    A --> H[("H2 file database")]
+    A --> E["Async Click Recorder"]
+    E --> H
 ```
 
-### Runtime Profiles
+### Runtime
 
-| Profile | Database | Redis | Purpose |
+| Profile | Database | Storage | Purpose |
 |---|---|---|---|
-| Default | H2 | Disabled | Local development and standalone Docker execution |
-| Scalable | PostgreSQL | Enabled | Shared multi-instance Docker deployment |
+| Default | H2 | `./data/urlshortener` | Local development |
 
-PostgreSQL is the source of truth. Redis caches only redirect mappings and
-falls back to PostgreSQL on cache misses or Redis failures.
+H2 persists application data to the local filesystem. The `data` directory is
+created automatically when the application starts.
 
 ### Redirect Flow
 
 ```text
 GET /{shortCode}
    ↓
-Redis lookup when caching is enabled
-   ↓
-PostgreSQL fallback on cache miss or Redis failure
-   ↓
+Read the mapping from H2
+  ↓
 Validate active and expiration state
    ↓
 Atomically update click count and last-accessed time
@@ -137,14 +127,11 @@ Return HTTP 302 redirect
 | Backend | Spring Boot, Spring Web MVC |
 | Persistence | Spring Data JPA, Hibernate |
 | Local database | H2 |
-| Scalable database | PostgreSQL 16 |
-| Cache | Redis 7 |
-| Load balancing | NGINX |
+| Database | H2 file database |
 | Validation | Jakarta Validation |
 | Monitoring | Spring Boot Actuator |
 | Testing | JUnit 5, Mockito, MockMvc, integration tests |
-| Build and deployment | Maven Wrapper, Docker, Docker Compose |
-| Performance testing | k6 |
+| Build and deployment | Maven Wrapper |
 
 ## API Reference
 
@@ -197,8 +184,9 @@ state, and expiration.
 GET /api/v1/urls/{shortCode}/click-analytics
 ```
 
-Returns detailed event totals and browser breakdown. Detailed events are
-persisted asynchronously, so this endpoint is eventually consistent.
+Returns total clicks, unique visitors, and browser, device, operating-system,
+and country breakdowns. Detailed events are persisted asynchronously, so this
+endpoint is eventually consistent.
 
 ### Deactivate a Short URL
 
@@ -206,8 +194,34 @@ persisted asynchronously, so this endpoint is eventually consistent.
 DELETE /api/v1/urls/{shortCode}
 ```
 
-Successful deactivation returns HTTP `204 No Content`. The short code is
-evicted from the cache and stops resolving on redirect.
+Successful deactivation returns HTTP `204 No Content`. The link remains in the
+management table as disabled and stops resolving on redirect.
+
+### Manage Links
+
+```http
+GET /api/v1/urls
+```
+
+Returns all links with their short URL, destination, status, click count, and
+timestamps for the Manage Links table.
+
+### Edit a Short URL
+
+```http
+PUT /api/v1/urls/{shortCode}
+Content-Type: application/json
+```
+
+Updates the destination and optional expiration while preserving the short code.
+
+### Permanently Delete a Short URL
+
+```http
+DELETE /api/v1/urls/{shortCode}/permanent
+```
+
+Permanently removes the link and returns HTTP `204 No Content`.
 
 ### Health
 
@@ -219,7 +233,7 @@ GET /actuator/health
 
 | Input | Rule |
 |---|---|
-| `originalUrl` | Required, maximum 2,048 characters, valid `http://` or `https://` URL |
+| `originalUrl` | Required, maximum 2,048 characters, absolute `http://` or `https://` URL with a valid host; credentials, fragments, whitespace, control characters, and unsafe delimiters are rejected |
 | `customAlias` | Optional, 4–30 characters, letters, digits, hyphens, and underscores |
 | `expiresAt` | Optional, complete ISO-8601 date-time in the future |
 
@@ -242,7 +256,7 @@ and rejected when they conflict with reserved application paths.
 |---|---|---|
 | Requirements | Organized requirements and surfaced ambiguities | Confirmed scope and acceptance criteria |
 | Decomposition | Proposed tasks and dependencies | Prioritized and approved the sequence |
-| Design | Suggested API, persistence, caching, and deployment options | Selected architecture and trade-offs |
+| Design | Suggested API, persistence, and local execution options | Selected architecture and trade-offs |
 | Implementation | Assisted with scaffolding and debugging | Reviewed, corrected, and integrated the code |
 | Testing | Suggested unit, integration, validation, and performance cases | Added project-specific cases and verified results |
 | Documentation | Drafted explanations and structure | Reconciled claims with code and evidence |
@@ -271,8 +285,7 @@ validation, Base62 generation, and aggregate analytics.
 ### Brownfield
 
 The working service was incrementally extended with expiration, custom aliases,
-a soft-delete endpoint, PostgreSQL, Redis, asynchronous detailed analytics, two
-application instances, NGINX, and Docker Compose.
+a soft-delete endpoint, and asynchronous detailed analytics.
 
 ### Ambiguous Requirement
 
@@ -285,7 +298,7 @@ alias that cannot conflict with reserved routes.
 Recorded Maven result:
 
 ```text
-Tests: 76
+Tests: 82
 Failures: 0
 Errors: 0
 Skipped: 0
@@ -297,9 +310,9 @@ Coverage includes:
 - URL creation and redirects
 - Expiration
 - Custom aliases
-- Soft-delete (deactivation) and its interaction with redirects and caching
+- Soft-delete (deactivation) and its interaction with redirects
 - Aggregate and detailed analytics
-- Redis cache hit, miss, stale, and failure paths
+- H2-backed persistence and analytics
 - Browser detection
 - Validation and structured errors
 - SQL-injection-style and XSS-style input
@@ -314,31 +327,16 @@ baseline is 358 Checkstyle violations (default Sun Checks ruleset) and 6
 SpotBugs findings (all Medium severity, mutable-field exposure patterns).
 Neither baseline has been remediated yet — see Future Scope below.
 
-### Performance Testing
-
-The k6 workload is located at:
-
-```text
-performance/k6/url-shortener-load.js
-```
-
-It includes smoke, redirect, creation, analytics, percentile latency, failure
-threshold, and staged virtual-user scenarios.
-
-A successful full 1,000-user benchmark is not claimed.
-
 ## Design Trade-Offs
 
 - **Base62 instead of UUIDs:** shorter public URLs, with collision checks and
   bounded retries.
-- **Redis with PostgreSQL as source of truth:** faster hot-link resolution with
-  database-backed recovery.
+- **File-backed H2:** simple persistence without external services.
 - **Synchronous aggregate analytics:** immediate count consistency, with one
   database write per successful redirect.
 - **Asynchronous detailed analytics:** protects redirect reliability, with
   brief eventual consistency.
-- **H2 locally and PostgreSQL in Docker:** simple local execution plus shared
-  persistence for multiple application instances.
+- **Single local instance:** keeps the prototype easy to run and inspect.
 - **HTTP 302 redirects:** retains control over analytics and expiration rather
   than encouraging permanent client caching.
 
@@ -356,9 +354,8 @@ actual requirements at this stage:
   user.
 - **Rate limiting and abuse prevention** — protect the create and redirect
   endpoints from high-volume or malicious traffic.
-- **Update API** — allow an existing short URL's destination, alias, or
-  expiration to be modified after creation (only creation and soft-delete
-  are currently supported).
+- **Alias update API** — changing an existing short code remains deferred;
+   destination and expiration updates are supported.
 - **Custom domains** — support short links served from domains other than
   the deployed application host.
 - **Cleanup scheduler** — periodically archive or purge expired and
@@ -368,15 +365,6 @@ actual requirements at this stage:
   survives instance restarts and can be retried.
 - **Schema migrations** — introduce Flyway or Liquibase instead of relying
   on JPA schema generation.
-- **Multi-region deployment** — replicate PostgreSQL (e.g. read replicas or
-  a multi-region managed database) and front regional NGINX/app clusters
-  with a global load balancer or DNS-based routing.
-- **Production secret management** — externalize credentials to a secrets
-  manager (e.g. HashiCorp Vault, AWS Secrets Manager) and inject them via
-  environment variables at container startup instead of config files.
-- **Completed large-scale benchmark** — run the full staged k6 scenario to
-  1,000 concurrent virtual users with all thresholds passing; this has not
-  been done yet.
 - **Static-analysis remediation** — address the current Checkstyle and
   SpotBugs baseline (see Static Analysis above); both gates are currently
   report-only.
@@ -386,7 +374,6 @@ actual requirements at this stage:
 ```text
 url-shortener/
 ├── src/main/java/com/assignment/urlshortener/
-│   ├── cache/
 │   ├── config/
 │   ├── controller/
 │   ├── dto/
@@ -397,15 +384,9 @@ url-shortener/
 │   └── util/
 ├── src/main/resources/
 │   ├── static/
-│   ├── application.properties
-│   └── application-scalable.properties
+│   └── application.properties
 ├── src/test/java/com/assignment/urlshortener/
 ├── documents/
-├── infra/nginx/
-├── performance/k6/
-├── Dockerfile
-├── docker-compose.yml
-├── compose.release.yml
 ├── pom.xml
 ├── mvnw
 ├── mvnw.cmd
@@ -414,22 +395,15 @@ url-shortener/
 
 ## Running the Project
 
-The application can be run in three ways:
-
-1. Standalone Docker image for a quick functional review
-2. Full Docker stack with PostgreSQL, Redis, app1, app2, and NGINX
-3. Local Java development with H2
+The application runs locally with Java 17 and a file-backed H2 database.
 
 Complete macOS, Linux, and Windows instructions are available in
 [`documents/04-setup-instructions.md`](documents/04-setup-instructions.md).
 
 ## Documentation
 
-- [`00-project-guide.md`](documents/00-project-guide.md)
-- [`01-architecture-and-design.md`](documents/01-architecture-and-design.md)
-- [`02-ai-engineering-log.md`](documents/02-ai-engineering-log.md)
-- [`03-scenarios-and-validation.md`](documents/03-scenarios-and-validation.md)
 - [`04-setup-instructions.md`](documents/04-setup-instructions.md)
+- [`05-ai-assisted-engineering-log.md`](documents/05-ai-assisted-engineering-log.md)
 
 ## Final Deliverables
 
@@ -438,12 +412,11 @@ Complete macOS, Linux, and Windows instructions are available in
 - Direct HTTP redirects to original URLs
 - Aggregate and detailed analytics
 - Optional expiration, custom aliases, and soft-delete
+- Manage Links table with edit, disable, and permanent delete actions
 - Validation and structured error handling
 - H2 local and standalone execution
-- PostgreSQL, Redis, NGINX, and two application instances
-- Architecture and AI-assisted engineering documentation
-- Greenfield, brownfield, and ambiguous-requirement scenarios
-- Automated tests and k6 performance-test assets
+- File-backed H2 persistence
+- Local setup and testing documentation
 
 
 ## Author 

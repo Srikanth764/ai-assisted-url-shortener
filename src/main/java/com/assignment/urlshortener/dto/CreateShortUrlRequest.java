@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import org.hibernate.validator.constraints.URL;
+import com.assignment.urlshortener.validation.StrictHttpUrl;
 
 import java.time.Instant;
 import java.util.Locale;
@@ -12,6 +13,7 @@ import java.util.Locale;
 public record CreateShortUrlRequest(
         @NotBlank
         @Size(max = 2048)
+        @StrictHttpUrl
         @URL(regexp = "^(?i)https?://.+", message = "originalUrl must be a well-formed HTTP or HTTPS URL")
         String originalUrl,
         @Future(message = "expiresAt must be in the future")

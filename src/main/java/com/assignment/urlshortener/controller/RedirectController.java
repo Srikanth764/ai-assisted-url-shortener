@@ -30,7 +30,8 @@ public class RedirectController {
         String originalUrl = urlShortenerService.resolveOriginalUrl(shortCode);
 
         clickEventRecorder.recordClickEvent(shortCode, Instant.now(),
-                request.getHeader(COUNTRY_HEADER), request.getHeader("User-Agent"));
+            request.getHeader(COUNTRY_HEADER), request.getHeader("User-Agent"),
+            request.getRemoteAddr());
 
         return ResponseEntity.status(HttpStatus.FOUND)
                 .location(URI.create(originalUrl))

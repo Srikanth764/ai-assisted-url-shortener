@@ -95,4 +95,9 @@ public class ShortUrl {
     public void deactivate() {
         this.active = false;
     }
+
+    public void updateDestination(String originalUrl, Instant expiresAt) {
+        this.originalUrl = originalUrl;
+        this.expiresAt = expiresAt;
+    }
 }

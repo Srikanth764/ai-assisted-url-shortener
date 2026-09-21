@@ -56,17 +56,15 @@ class SecurityValidationTest {
     }
 
     @Test
-    void createShortUrlWithSqlInjectionStyleOriginalUrlIsAcceptedAsLiteralText() throws Exception {
+        void createShortUrlWithSqlInjectionStyleOriginalUrlReturnsBadRequest() throws Exception {
         String maliciousUrl = "https://example.com/search?id=1'OR'1'='1';DROP;--";
-        when(urlShortenerService.createShortUrl(any())).thenReturn(
-                new CreateShortUrlResponse("abc1234", "http://short.ly/abc1234", maliciousUrl, Instant.now(), null));
 
         mockMvc.perform(post("/api/v1/urls")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
                                 new CreateShortUrlRequest(maliciousUrl, null, null))))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.originalUrl").value(maliciousUrl));
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.originalUrl").exists());
     }
 
     @Test
@@ -108,6 +106,35 @@ class SecurityValidationTest {
                                 new CreateShortUrlRequest("data:text/html,<script>alert(1)</script>", null, null))))
                 .andExpect(status().isBadRequest());
     }
+
+        @Test
+        void createShortUrlWithCredentialsReturnsBadRequest() throws Exception {
+                mockMvc.perform(post("/api/v1/urls")
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(objectMapper.writeValueAsString(
+                                                                new CreateShortUrlRequest("https://user:password@example.com/page", null, null))))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.fieldErrors.originalUrl").exists());
+        }
+
+        @Test
+        void createShortUrlWithFragmentReturnsBadRequest() throws Exception {
+                mockMvc.perform(post("/api/v1/urls")
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(objectMapper.writeValueAsString(
+                                                                new CreateShortUrlRequest("https://example.com/page#section", null, null))))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.fieldErrors.originalUrl").exists());
+        }
+
+        @Test
+        void createShortUrlWithWhitespaceReturnsBadRequest() throws Exception {
+                mockMvc.perform(post("/api/v1/urls")
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content("{\"originalUrl\":\"https://example.com/a b\"}"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.fieldErrors.originalUrl").exists());
+        }
 
     // ---- 3. XSS-style input ----
 

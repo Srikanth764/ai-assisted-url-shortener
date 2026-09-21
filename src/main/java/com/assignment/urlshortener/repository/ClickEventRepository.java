@@ -15,6 +15,21 @@ public interface ClickEventRepository extends JpaRepository<ClickEvent, Long> {
             + "WHERE c.shortCode = :shortCode GROUP BY c.browser")
     List<GroupCount> countByBrowserForShortCode(@Param("shortCode") String shortCode);
 
+        @Query("SELECT c.device AS name, COUNT(c) AS total FROM ClickEvent c "
+            + "WHERE c.shortCode = :shortCode GROUP BY c.device")
+        List<GroupCount> countByDeviceForShortCode(@Param("shortCode") String shortCode);
+
+        @Query("SELECT c.operatingSystem AS name, COUNT(c) AS total FROM ClickEvent c "
+            + "WHERE c.shortCode = :shortCode GROUP BY c.operatingSystem")
+        List<GroupCount> countByOperatingSystemForShortCode(@Param("shortCode") String shortCode);
+
+        @Query("SELECT c.country AS name, COUNT(c) AS total FROM ClickEvent c "
+            + "WHERE c.shortCode = :shortCode GROUP BY c.country")
+        List<GroupCount> countByCountryForShortCode(@Param("shortCode") String shortCode);
+
+        @Query("SELECT COUNT(DISTINCT c.visitorKey) FROM ClickEvent c WHERE c.shortCode = :shortCode")
+        long countUniqueVisitors(@Param("shortCode") String shortCode);
+
     interface GroupCount {
         String getName();
 

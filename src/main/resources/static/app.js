@@ -1,6 +1,21 @@
 (function () {
   "use strict";
 
+  var tabButtons = document.querySelectorAll(".tab-button");
+  tabButtons.forEach(function (button) {
+    button.addEventListener("click", function () {
+      var panelId = button.getAttribute("data-panel");
+      tabButtons.forEach(function (tab) {
+        var isSelected = tab === button;
+        tab.classList.toggle("is-active", isSelected);
+        tab.setAttribute("aria-selected", String(isSelected));
+      });
+      document.querySelectorAll(".panel").forEach(function (panel) {
+        panel.classList.toggle("is-active", panel.id === panelId);
+      });
+    });
+  });
+
   function toIsoUtc(datetimeLocalValue) {
     if (!datetimeLocalValue) {
       return null;
@@ -123,6 +138,7 @@
 
       createResult.hidden = false;
       setFormMessage(createMessage, "Short URL created.", "success");
+      loadManagedLinks();
     } catch (err) {
       setFormMessage(createMessage, "Network error while creating the short URL.", "error");
     }
@@ -146,86 +162,201 @@
     }
   });
 
-  // Analytics lookup
-  var analyticsForm = document.getElementById("analytics-form");
-  var analyticsMessage = document.getElementById("analytics-message");
-  var analyticsResult = document.getElementById("analytics-result");
+  var managedLinks = [];
+  var linksTableBody = document.getElementById("links-table-body");
+  var linksEmpty = document.getElementById("links-empty");
+  var manageMessage = document.getElementById("manage-message");
+  var linksSearch = document.getElementById("links-search");
+  var analyticsSelect = document.getElementById("analytics-short-code");
 
-  analyticsForm.addEventListener("submit", async function (event) {
-    event.preventDefault();
-    setFormMessage(analyticsMessage, "", null);
-    analyticsResult.hidden = true;
+  function displayDate(value) {
+    return value ? new Date(value).toLocaleString() : "-";
+  }
 
-    var shortCode = document.getElementById("analytics-short-code").value.trim();
-    if (!shortCode) {
-      setFormMessage(analyticsMessage, "Please enter a short code.", "error");
-      return;
-    }
-
-    try {
-      var response = await fetch("/api/v1/urls/" + encodeURIComponent(shortCode) + "/analytics");
-
-      if (!response.ok) {
-        var errorBody = await parseJsonSafe(response);
-        applyApiError(analyticsMessage, null, response.status, errorBody);
-        return;
-      }
-
-      var data = await response.json();
-
-      document.getElementById("analytics-originalUrl").textContent = data.originalUrl;
-      document.getElementById("analytics-clickCount").textContent = String(data.clickCount);
-      document.getElementById("analytics-createdAt").textContent = formatInstant(data.createdAt);
-      document.getElementById("analytics-lastAccessedAt").textContent = formatInstant(data.lastAccessedAt);
-      document.getElementById("analytics-expiresAt").textContent = formatInstant(data.expiresAt);
-
-      analyticsResult.hidden = false;
-      setFormMessage(analyticsMessage, "", null);
-    } catch (err) {
-      setFormMessage(analyticsMessage, "Network error while fetching analytics.", "error");
-    }
-  });
-
-  // Click analytics
-  var clickAnalyticsForm = document.getElementById("click-analytics-form");
-  var clickAnalyticsMessage = document.getElementById("click-analytics-message");
-  var clickAnalyticsResult = document.getElementById("click-analytics-result");
-
-  function renderBreakdown(listEl, breakdown) {
-    listEl.innerHTML = "";
-    var entries = Object.keys(breakdown || {});
-    if (entries.length === 0) {
-      var emptyItem = document.createElement("li");
-      emptyItem.className = "breakdown-empty";
-      emptyItem.textContent = "No data yet.";
-      listEl.appendChild(emptyItem);
-      return;
-    }
-    entries.sort(function (a, b) {
-      return breakdown[b] - breakdown[a];
-    });
-    entries.forEach(function (key) {
-      var item = document.createElement("li");
-      item.className = "breakdown-item";
-      var nameSpan = document.createElement("span");
-      nameSpan.textContent = key;
-      var countSpan = document.createElement("span");
-      countSpan.className = "breakdown-count";
-      countSpan.textContent = String(breakdown[key]);
-      item.appendChild(nameSpan);
-      item.appendChild(countSpan);
-      listEl.appendChild(item);
+  function populateAnalyticsSelect(links) {
+    analyticsSelect.innerHTML = '<option value="">-- select --</option>';
+    links.forEach(function (link) {
+      var option = document.createElement("option");
+      option.value = link.shortCode;
+      option.textContent = link.shortCode + " (" + link.originalUrl + ")";
+      analyticsSelect.appendChild(option);
     });
   }
 
-  clickAnalyticsForm.addEventListener("submit", async function (event) {
-    event.preventDefault();
-    setFormMessage(clickAnalyticsMessage, "", null);
-    clickAnalyticsResult.hidden = true;
+  function renderManagedLinks() {
+    var query = linksSearch.value.trim().toLowerCase();
+    var visibleLinks = managedLinks.filter(function (link) {
+      return !query || link.shortCode.toLowerCase().includes(query)
+        || link.originalUrl.toLowerCase().includes(query);
+    });
+    linksTableBody.innerHTML = "";
+    linksEmpty.hidden = visibleLinks.length !== 0;
+    visibleLinks.forEach(function (link) {
+      var row = document.createElement("tr");
+      var shortUrlCell = document.createElement("td");
+      var shortUrl = document.createElement("a");
+      shortUrl.href = link.shortUrl;
+      shortUrl.target = "_blank";
+      shortUrl.rel = "noopener noreferrer";
+      shortUrl.textContent = link.shortUrl;
+      shortUrlCell.appendChild(shortUrl);
+      row.appendChild(shortUrlCell);
+      [link.originalUrl, link.clickCount, displayDate(link.createdAt), displayDate(link.expiresAt)]
+        .forEach(function (value) {
+          var cell = document.createElement("td");
+          cell.textContent = String(value);
+          row.appendChild(cell);
+        });
+      var statusCell = document.createElement("td");
+      var status = document.createElement("span");
+      status.className = "status-badge " + (link.active ? "status-active" : "status-inactive");
+      status.textContent = link.active ? "Active" : "Disabled";
+      statusCell.appendChild(status);
+      row.insertBefore(statusCell, row.children[1]);
+      var actions = document.createElement("td");
+      actions.className = "action-cell";
+      actions.appendChild(actionButton("Edit", "edit", link.shortCode));
+      if (link.active) {
+        actions.appendChild(actionButton("Disable", "disable", link.shortCode));
+      }
+      actions.appendChild(actionButton("Delete", "delete", link.shortCode));
+      row.appendChild(actions);
+      linksTableBody.appendChild(row);
+    });
+  }
 
-    var shortCode = document.getElementById("click-analytics-short-code").value.trim();
+  function actionButton(label, action, shortCode) {
+    var button = document.createElement("button");
+    button.type = "button";
+    button.className = "table-action " + (action === "delete" ? "danger-action" : "");
+    button.dataset.action = action;
+    button.dataset.shortCode = shortCode;
+    button.textContent = label;
+    return button;
+  }
+
+  async function loadManagedLinks() {
+    try {
+      var response = await fetch("/api/v1/urls");
+      if (!response.ok) {
+        throw new Error("Unable to load links");
+      }
+      managedLinks = await response.json();
+      renderManagedLinks();
+      populateAnalyticsSelect(managedLinks);
+    } catch (err) {
+      setFormMessage(manageMessage, "Unable to load shortened links.", "error");
+    }
+  }
+
+  document.getElementById("refresh-links-button").addEventListener("click", loadManagedLinks);
+  linksSearch.addEventListener("input", renderManagedLinks);
+  linksTableBody.addEventListener("click", async function (event) {
+    var button = event.target.closest("button[data-action]");
+    if (!button) {
+      return;
+    }
+    var action = button.dataset.action;
+    var shortCode = encodeURIComponent(button.dataset.shortCode);
+    if (action === "edit") {
+      var existingLink = managedLinks.find(function (link) {
+        return link.shortCode === button.dataset.shortCode;
+      });
+      var updatedUrl = window.prompt("Destination URL", existingLink.originalUrl);
+      if (!updatedUrl) {
+        return;
+      }
+      var updatedExpiry = window.prompt("Expiration (ISO-8601, optional)", existingLink.expiresAt || "");
+      try {
+        var editResponse = await fetch("/api/v1/urls/" + shortCode, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            originalUrl: updatedUrl,
+            expiresAt: updatedExpiry || null
+          })
+        });
+        if (!editResponse.ok) {
+          throw new Error("Request failed");
+        }
+        await loadManagedLinks();
+      } catch (err) {
+        setFormMessage(manageMessage, "Could not edit this link.", "error");
+      }
+      return;
+    }
+    if (action === "delete" && !window.confirm("Delete this short link permanently?")) {
+      return;
+    }
+    try {
+      var response = await fetch("/api/v1/urls/" + shortCode + (action === "delete" ? "/permanent" : ""), {
+        method: "DELETE"
+      });
+      if (!response.ok) {
+        throw new Error("Request failed");
+      }
+      await loadManagedLinks();
+    } catch (err) {
+      setFormMessage(manageMessage, "Could not update this link.", "error");
+    }
+  });
+
+  tabButtons.forEach(function (button) {
+    button.addEventListener("click", function () {
+      if (button.dataset.panel === "manage-panel" || button.dataset.panel === "analytics-panel") {
+        loadManagedLinks();
+      }
+    });
+  });
+
+  var analyticsMessage = document.getElementById("analytics-message");
+  var analyticsContent = document.getElementById("analytics-content");
+  var analyticsEmpty = document.getElementById("analytics-empty");
+
+  function renderDistribution(chartId, legendId, values) {
+    var chart = document.getElementById(chartId);
+    var legend = document.getElementById(legendId);
+    var entries = Object.keys(values || {}).sort(function (a, b) {
+      return values[b] - values[a];
+    });
+    var total = entries.reduce(function (sum, key) { return sum + values[key]; }, 0);
+    var colors = ["#1429bd", "#5267db", "#8291e2", "#aeb8ed", "#d2d8f6"];
+    var position = 0;
+    var stops = [];
+    legend.innerHTML = "";
+    entries.forEach(function (key, index) {
+      var next = position + (values[key] / Math.max(total, 1)) * 100;
+      stops.push(colors[index % colors.length] + " " + position + "% " + next + "%");
+      position = next;
+      var item = document.createElement("li");
+      item.innerHTML = '<span class="legend-swatch" style="background:' + colors[index % colors.length] + '"></span>'
+        + '<span>' + key + '</span><strong>' + values[key] + '</strong>';
+      legend.appendChild(item);
+    });
+    chart.style.background = entries.length ? "conic-gradient(" + stops.join(", ") + ")" : "#e5e8f4";
+    if (!entries.length) {
+      legend.innerHTML = "<li>No data yet.</li>";
+    }
+  }
+
+  function renderClickChart(total) {
+    var chart = document.getElementById("click-chart");
+    chart.innerHTML = "";
+    var bar = document.createElement("div");
+    bar.className = "click-bar";
+    bar.style.height = Math.max(total ? 12 : 2, Math.min(100, total * 24)) + "%";
+    bar.title = total + " click(s)";
+    var label = document.createElement("span");
+    label.textContent = new Date().toISOString().slice(0, 10);
+    bar.appendChild(label);
+    chart.appendChild(bar);
+  }
+
+  async function loadAnalytics(shortCode) {
+    shortCode = shortCode || document.getElementById("analytics-short-code").value.trim();
     if (!shortCode) {
-      setFormMessage(clickAnalyticsMessage, "Please enter a short code.", "error");
+      analyticsContent.hidden = true;
+      analyticsEmpty.hidden = false;
       return;
     }
 
@@ -234,46 +365,29 @@
 
       if (!response.ok) {
         var errorBody = await parseJsonSafe(response);
-        applyApiError(clickAnalyticsMessage, null, response.status, errorBody);
+        applyApiError(analyticsMessage, null, response.status, errorBody);
         return;
       }
 
       var data = await response.json();
-
-      document.getElementById("click-analytics-totalEvents").textContent = String(data.totalEvents);
-      renderBreakdown(document.getElementById("click-analytics-byBrowser"), data.byBrowser);
-
-      clickAnalyticsResult.hidden = false;
-      setFormMessage(clickAnalyticsMessage, "", null);
+      document.getElementById("analytics-total-clicks").textContent = String(data.totalEvents);
+      document.getElementById("analytics-unique-visitors").textContent = String(data.uniqueVisitors);
+      renderClickChart(data.totalEvents);
+      renderDistribution("device-chart", "device-legend", data.byDevice);
+      renderDistribution("browser-chart", "browser-legend", data.byBrowser);
+      renderDistribution("os-chart", "os-legend", data.byOperatingSystem);
+      renderDistribution("country-chart", "country-legend", data.byCountry);
+      analyticsContent.hidden = false;
+      analyticsEmpty.hidden = true;
+      setFormMessage(analyticsMessage, "", null);
     } catch (err) {
-      setFormMessage(clickAnalyticsMessage, "Network error while fetching click analytics.", "error");
+      setFormMessage(analyticsMessage, "Network error while fetching analytics.", "error");
     }
+  }
+
+  analyticsSelect.addEventListener("change", function () {
+    loadAnalytics(analyticsSelect.value);
   });
 
-  // Health check
-  var healthButton = document.getElementById("health-check-button");
-  var healthMessage = document.getElementById("health-message");
-  var healthResult = document.getElementById("health-result");
-
-  healthButton.addEventListener("click", async function () {
-    setFormMessage(healthMessage, "", null);
-    healthResult.hidden = true;
-
-    try {
-      var response = await fetch("/actuator/health");
-      var data = await parseJsonSafe(response);
-      var status = data && data.status ? data.status : "UNKNOWN";
-
-      document.getElementById("health-status").textContent = status;
-      healthResult.hidden = false;
-
-      if (status === "UP") {
-        setFormMessage(healthMessage, "Service is healthy.", "success");
-      } else {
-        setFormMessage(healthMessage, "Service is not healthy.", "error");
-      }
-    } catch (err) {
-      setFormMessage(healthMessage, "Network error while checking health.", "error");
-    }
-  });
+  loadManagedLinks();
 })();
