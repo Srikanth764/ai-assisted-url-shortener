@@ -382,6 +382,8 @@ Complete macOS, Linux, and Windows instructions are available in
 
 - [`04-setup-instructions.md`](documents/04-setup-instructions.md)
 - [`05-ai-assisted-engineering-log.md`](documents/05-ai-assisted-engineering-log.md)
+- [`06-software-requirements-specification.md`](documents/06-software-requirements-specification.md)
+- [`07-complete-ai-build-prompt.md`](documents/07-complete-ai-build-prompt.md)
 
 ## Final Deliverables
 
