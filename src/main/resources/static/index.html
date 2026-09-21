@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>URL Shortener</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<header class="app-header">
+  <div class="header-inner">
+    <h1>URL Shortener</h1>
+    <p class="subtitle">Create, manage and track shortened links - backed by Spring Boot &amp; H2</p>
+  </div>
+</header>
+
+<main class="container">
+  <nav class="tab-menu" aria-label="URL shortener sections">
+    <button type="button" class="tab-button is-active" data-panel="create-panel" aria-selected="true">Create Link</button>
+    <button type="button" class="tab-button" data-panel="manage-panel" aria-selected="false">Manage Links</button>
+    <button type="button" class="tab-button" data-panel="analytics-panel" aria-selected="false">Analytics</button>
+  </nav>
+
+  <section class="panel is-active" id="create-panel" aria-labelledby="create-heading">
+    <div class="card">
+    <h2 id="create-heading">Create a Short URL</h2>
+    <form id="create-form" novalidate>
+      <div class="field">
+        <label for="original-url">Original URL</label>
+        <input type="url" id="original-url" name="originalUrl" placeholder="https://example.com/some/long/path" required />
+        <p class="field-error" id="error-originalUrl"></p>
+      </div>
+
+      <div class="field">
+        <label for="custom-alias">Custom alias (optional)</label>
+        <input type="text" id="custom-alias" name="customAlias" placeholder="my-alias" />
+        <p class="field-error" id="error-customAlias"></p>
+      </div>
+
+      <div class="field">
+        <label for="expires-at">Expires at (optional)</label>
+        <input type="datetime-local" id="expires-at" name="expiresAt"
+        />
+        <p class="field-error" id="error-expiresAt"></p>
+        <small>
+          A complete date and time is required to set an expiration.
+        </small>
+      </div>
+
+      <button type="submit" class="btn-primary">Create Short URL</button>
+    </form>
+
+    <p class="form-message" id="create-message" role="alert"></p>
+
+    <div class="result-panel" id="create-result" hidden>
+      <h3>Short URL Created</h3>
+      <div class="result-row">
+        <span class="result-label">Short URL</span>
+        <span class="result-value" id="result-shortUrl"></span>
+        <button type="button" class="btn-secondary" id="copy-button">Copy</button>
+        <a id="open-link" class="btn-secondary" href="#" target="_blank" rel="noopener noreferrer">Open</a>
+      </div>
+      <div class="result-row">
+        <span class="result-label">Short Code</span>
+        <span class="result-value" id="result-shortCode"></span>
+      </div>
+      <div class="result-row">
+        <span class="result-label">Created At</span>
+        <span class="result-value" id="result-createdAt"></span>
+      </div>
+      <div class="result-row">
+        <span class="result-label">Expires At</span>
+        <span class="result-value" id="result-expiresAt"></span>
+      </div>
+    </div>
+    </div>
+  </section>
+
+  <section class="panel" id="manage-panel" aria-labelledby="manage-heading">
+    <div class="card manage-card">
+      <div class="section-heading">
+        <h2 id="manage-heading">Your links</h2>
+        <div class="table-tools">
+          <label class="sr-only" for="links-search">Search links</label>
+          <input type="search" id="links-search" placeholder="Search by URL or code" />
+          <button type="button" class="btn-secondary" id="refresh-links-button">Refresh</button>
+        </div>
+      </div>
+      <p class="form-message" id="manage-message" role="alert"></p>
+      <div class="table-wrap">
+        <table class="links-table">
+          <thead>
+            <tr>
+              <th>Short URL</th>
+              <th>Destination</th>
+              <th>Status</th>
+              <th>Clicks</th>
+              <th>Created</th>
+              <th>Expires</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="links-table-body"></tbody>
+        </table>
+        <p class="empty-state" id="links-empty" hidden>No shortened links found.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="analytics-panel" aria-labelledby="analytics-heading">
+    <div class="analytics-dashboard">
+      <div class="analytics-toolbar">
+        <h2 id="analytics-heading">Link analytics</h2>
+        <div class="select-field">
+          <label for="analytics-short-code">Select link</label>
+          <select id="analytics-short-code" name="shortCode" required>
+            <option value="">-- select --</option>
+          </select>
+        </div>
+      </div>
+      <p class="form-message" id="analytics-message" role="alert"></p>
+      <div class="analytics-empty" id="analytics-empty">Select a link above to view analytics.</div>
+      <div class="analytics-content" id="analytics-content" hidden>
+        <div class="metric-grid">
+          <div class="metric-card"><strong id="analytics-total-clicks">0</strong><span>Total Clicks</span></div>
+          <div class="metric-card"><strong id="analytics-unique-visitors">0</strong><span>Unique Visitors</span></div>
+        </div>
+        <div class="analytics-chart-grid">
+          <div class="chart-card"><h3>Clicks over time</h3><div class="click-chart" id="click-chart"></div></div>
+          <div class="chart-card"><h3>Device</h3><div class="donut-chart" id="device-chart"></div><ul class="chart-legend" id="device-legend"></ul></div>
+          <div class="chart-card"><h3>Browser</h3><div class="donut-chart" id="browser-chart"></div><ul class="chart-legend" id="browser-legend"></ul></div>
+          <div class="chart-card"><h3>Operating System</h3><div class="donut-chart" id="os-chart"></div><ul class="chart-legend" id="os-legend"></ul></div>
+          <div class="chart-card"><h3>Country</h3><div class="donut-chart" id="country-chart"></div><ul class="chart-legend" id="country-legend"></ul></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
