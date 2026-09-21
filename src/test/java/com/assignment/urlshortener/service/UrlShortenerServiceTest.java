@@ -1,0 +1,252 @@
+package com.assignment.urlshortener.service;
+
+import com.assignment.urlshortener.dto.CreateShortUrlRequest;
+import com.assignment.urlshortener.dto.CreateShortUrlResponse;
+import com.assignment.urlshortener.dto.ManagedUrlResponse;
+import com.assignment.urlshortener.dto.UpdateShortUrlRequest;
+import com.assignment.urlshortener.entity.ShortUrl;
+import com.assignment.urlshortener.exception.CustomAliasConflictException;
+import com.assignment.urlshortener.exception.ShortCodeGenerationException;
+import com.assignment.urlshortener.exception.ShortUrlAlreadyInactiveException;
+import com.assignment.urlshortener.exception.ShortUrlExpiredException;
+import com.assignment.urlshortener.exception.ShortUrlNotFoundException;
+import com.assignment.urlshortener.repository.ShortUrlRepository;
+import com.assignment.urlshortener.util.ShortCodeGenerator;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
+
+import java.time.Instant;
+import java.util.Optional;
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class UrlShortenerServiceTest {
+
+    @Mock
+    private ShortUrlRepository shortUrlRepository;
+
+    @Mock
+    private ShortCodeGenerator shortCodeGenerator;
+
+    private UrlShortenerService urlShortenerService;
+
+    @BeforeEach
+    void setUp() {
+        urlShortenerService =
+            new UrlShortenerService(shortUrlRepository, shortCodeGenerator, "http://short.ly");
+    }
+
+    @Test
+    void createShortUrlSucceedsOnFirstAttempt() {
+        String originalUrl = "https://example.com/page";
+        when(shortCodeGenerator.generate()).thenReturn("abc1234");
+        when(shortUrlRepository.existsByShortCode("abc1234")).thenReturn(false);
+
+        CreateShortUrlResponse response =
+                urlShortenerService.createShortUrl(new CreateShortUrlRequest(originalUrl, null, null));
+
+        assertThat(response.shortCode()).isEqualTo("abc1234");
+        assertThat(response.originalUrl()).isEqualTo(originalUrl);
+        assertThat(response.shortUrl()).isEqualTo("http://short.ly/abc1234");
+        assertThat(response.createdAt()).isNotNull();
+        assertThat(response.expiresAt()).isNull();
+        verify(shortUrlRepository).save(any(ShortUrl.class));
+    }
+
+    @Test
+    void createShortUrlRetriesAfterCollision() {
+        when(shortCodeGenerator.generate()).thenReturn("aaaaaaa", "bbbbbbb");
+        when(shortUrlRepository.existsByShortCode("aaaaaaa")).thenReturn(true);
+        when(shortUrlRepository.existsByShortCode("bbbbbbb")).thenReturn(false);
+
+        CreateShortUrlResponse response =
+                urlShortenerService.createShortUrl(new CreateShortUrlRequest("https://example.com/retry", null, null));
+
+        assertThat(response.shortCode()).isEqualTo("bbbbbbb");
+        verify(shortCodeGenerator, times(2)).generate();
+        verify(shortUrlRepository).save(any(ShortUrl.class));
+    }
+
+    @Test
+    void createShortUrlFailsAfterFiveCollisions() {
+        when(shortCodeGenerator.generate()).thenReturn("ccccccc");
+        when(shortUrlRepository.existsByShortCode("ccccccc")).thenReturn(true);
+
+        assertThrows(ShortCodeGenerationException.class,
+                () -> urlShortenerService.createShortUrl(
+                        new CreateShortUrlRequest("https://example.com/fail", null, null)));
+
+        verify(shortCodeGenerator, times(5)).generate();
+        verify(shortUrlRepository, never()).save(any(ShortUrl.class));
+    }
+
+    @Test
+    void createShortUrlStoresAndReturnsExpiresAt() {
+        Instant expiresAt = Instant.now().plusSeconds(3600);
+        when(shortCodeGenerator.generate()).thenReturn("exp1234");
+        when(shortUrlRepository.existsByShortCode("exp1234")).thenReturn(false);
+
+        CreateShortUrlResponse response = urlShortenerService.createShortUrl(
+                new CreateShortUrlRequest("https://example.com/expiring", expiresAt, null));
+
+        assertThat(response.expiresAt()).isEqualTo(expiresAt);
+        verify(shortUrlRepository).save(any(ShortUrl.class));
+    }
+
+    @Test
+    void createShortUrlUsesCustomAliasWhenProvided() {
+        when(shortUrlRepository.existsByShortCode("my-alias")).thenReturn(false);
+
+        CreateShortUrlResponse response = urlShortenerService.createShortUrl(
+                new CreateShortUrlRequest("https://example.com/custom", null, "my-alias"));
+
+        assertThat(response.shortCode()).isEqualTo("my-alias");
+        assertThat(response.shortUrl()).isEqualTo("http://short.ly/my-alias");
+        verify(shortCodeGenerator, never()).generate();
+        verify(shortUrlRepository).save(any(ShortUrl.class));
+    }
+
+    @Test
+    void createShortUrlThrowsConflictWhenCustomAliasAlreadyExists() {
+        when(shortUrlRepository.existsByShortCode("taken")).thenReturn(true);
+
+        assertThrows(CustomAliasConflictException.class, () -> urlShortenerService.createShortUrl(
+                new CreateShortUrlRequest("https://example.com/dup", null, "taken")));
+
+        verify(shortUrlRepository, never()).save(any(ShortUrl.class));
+    }
+
+    @Test
+    void createShortUrlThrowsConflictWhenCustomAliasIsReserved() {
+        assertThrows(CustomAliasConflictException.class, () -> urlShortenerService.createShortUrl(
+                new CreateShortUrlRequest("https://example.com/reserved", null, "admin")));
+
+        verify(shortUrlRepository, never()).existsByShortCode(any());
+        verify(shortUrlRepository, never()).save(any(ShortUrl.class));
+    }
+
+    @Test
+    void createShortUrlThrowsConflictWhenCustomAliasRaceLosesOnSave() {
+        when(shortUrlRepository.existsByShortCode("race-alias")).thenReturn(false);
+        when(shortUrlRepository.save(any(ShortUrl.class))).thenThrow(new DataIntegrityViolationException("dup"));
+
+        assertThrows(CustomAliasConflictException.class, () -> urlShortenerService.createShortUrl(
+                new CreateShortUrlRequest("https://example.com/race", null, "race-alias")));
+    }
+
+    @Test
+    void getManagedUrlsMapsLinkSummaryFields() {
+        ShortUrl shortUrl = new ShortUrl("https://example.com/page", "abc1234", Instant.now());
+        when(shortUrlRepository.findAll()).thenReturn(List.of(shortUrl));
+
+        List<ManagedUrlResponse> response = urlShortenerService.getManagedUrls();
+
+        assertThat(response).hasSize(1);
+        assertThat(response.get(0).shortCode()).isEqualTo("abc1234");
+        assertThat(response.get(0).shortUrl()).isEqualTo("http://short.ly/abc1234");
+        assertThat(response.get(0).active()).isTrue();
+    }
+
+    @Test
+    void resolveOriginalUrlReturnsUrlForActiveNonExpiringShortCode() {
+        ShortUrl shortUrl = new ShortUrl("https://example.com/page", "abc1234", Instant.now());
+        when(shortUrlRepository.findByShortCode("abc1234")).thenReturn(Optional.of(shortUrl));
+
+        String originalUrl = urlShortenerService.resolveOriginalUrl("abc1234");
+
+        assertThat(originalUrl).isEqualTo("https://example.com/page");
+        verify(shortUrlRepository).incrementClickCount(eq("abc1234"), any(Instant.class));
+    }
+
+    @Test
+    void resolveOriginalUrlThrowsWhenShortCodeMissing() {
+        when(shortUrlRepository.findByShortCode("missing")).thenReturn(Optional.empty());
+
+        assertThrows(ShortUrlNotFoundException.class, () -> urlShortenerService.resolveOriginalUrl("missing"));
+
+        verify(shortUrlRepository, never()).incrementClickCount(any(), any());
+    }
+
+    @Test
+    void resolveOriginalUrlThrowsGoneAndDoesNotIncrementClickCountWhenExpired() {
+        Instant expiresAt = Instant.now().minusSeconds(60);
+        ShortUrl shortUrl = new ShortUrl("https://example.com/expired", "exp1234", Instant.now().minusSeconds(3600),
+                expiresAt);
+        when(shortUrlRepository.findByShortCode("exp1234")).thenReturn(Optional.of(shortUrl));
+
+        assertThrows(ShortUrlExpiredException.class, () -> urlShortenerService.resolveOriginalUrl("exp1234"));
+
+        verify(shortUrlRepository, never()).incrementClickCount(any(), any());
+    }
+
+    @Test
+    void deactivateShortUrlSucceedsForActiveShortCode() {
+        ShortUrl shortUrl = new ShortUrl("https://example.com/page", "abc1234", Instant.now());
+        when(shortUrlRepository.findByShortCode("abc1234")).thenReturn(Optional.of(shortUrl));
+
+        urlShortenerService.deactivateShortUrl("abc1234");
+
+        assertThat(shortUrl.isActive()).isFalse();
+        verify(shortUrlRepository).save(shortUrl);
+    }
+
+    @Test
+    void deactivateShortUrlThrowsNotFoundWhenShortCodeMissing() {
+        when(shortUrlRepository.findByShortCode("missing")).thenReturn(Optional.empty());
+
+        assertThrows(ShortUrlNotFoundException.class,
+                () -> urlShortenerService.deactivateShortUrl("missing"));
+
+        verify(shortUrlRepository, never()).save(any());
+    }
+
+    @Test
+    void deactivateShortUrlThrowsWhenAlreadyInactive() {
+        ShortUrl shortUrl = new ShortUrl("https://example.com/page", "inactive1", Instant.now());
+        shortUrl.deactivate();
+        when(shortUrlRepository.findByShortCode("inactive1")).thenReturn(Optional.of(shortUrl));
+
+        assertThrows(ShortUrlAlreadyInactiveException.class,
+                () -> urlShortenerService.deactivateShortUrl("inactive1"));
+
+        verify(shortUrlRepository, never()).save(any());
+    }
+
+    @Test
+    void updateShortUrlChangesDestinationAndExpiration() {
+        ShortUrl shortUrl = new ShortUrl("https://example.com/old", "abc1234", Instant.now());
+        Instant expiresAt = Instant.now().plusSeconds(3600);
+        when(shortUrlRepository.findByShortCode("abc1234")).thenReturn(Optional.of(shortUrl));
+
+        urlShortenerService.updateShortUrl("abc1234",
+                new UpdateShortUrlRequest("https://example.com/new", expiresAt));
+
+        assertThat(shortUrl.getOriginalUrl()).isEqualTo("https://example.com/new");
+        assertThat(shortUrl.getExpiresAt()).isEqualTo(expiresAt);
+        verify(shortUrlRepository).save(shortUrl);
+    }
+
+    @Test
+    void deleteShortUrlRemovesExistingLink() {
+        ShortUrl shortUrl = new ShortUrl("https://example.com/page", "abc1234", Instant.now());
+        when(shortUrlRepository.findByShortCode("abc1234")).thenReturn(Optional.of(shortUrl));
+
+        urlShortenerService.deleteShortUrl("abc1234");
+
+        verify(shortUrlRepository).delete(shortUrl);
+    }
+}
