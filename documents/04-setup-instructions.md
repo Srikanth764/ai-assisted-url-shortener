@@ -54,14 +54,6 @@ Windows PowerShell:
 mvn clean test
 ```
 
-## Health Check
-
-```text
-http://localhost:8080/actuator/health
-```
-
-The expected status is `UP`.
-
 ## Reset Local Data
 
 Stop the application, then remove the local H2 files when a clean database is

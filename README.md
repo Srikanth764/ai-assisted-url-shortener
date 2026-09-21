@@ -81,7 +81,6 @@ public short code.
 - Use H2 for local and standalone execution
 - Use a file-backed H2 database for local persistence
 - List, search, edit, disable, and delete links from the browser interface
-- Expose Actuator health and `X-App-Instance`
 - Include automated tests
 
 ## Architecture
@@ -129,7 +128,6 @@ Return HTTP 302 redirect
 | Local database | H2 |
 | Database | H2 file database |
 | Validation | Jakarta Validation |
-| Monitoring | Spring Boot Actuator |
 | Testing | JUnit 5, Mockito, MockMvc, integration tests |
 | Build and deployment | Apache Maven |
 
@@ -214,12 +212,6 @@ DELETE /api/v1/urls/{shortCode}/permanent
 
 Permanently removes the link and returns HTTP `204 No Content`.
 
-### Health
-
-```http
-GET /actuator/health
-```
-
 ## Validation and HTTP Statuses
 
 | Input | Rule |
@@ -286,13 +278,11 @@ alias that cannot conflict with reserved routes.
 
 ## Testing
 
-Recorded Maven result:
+Current JUnit source inventory:
 
 ```text
-Tests: 82
-Failures: 0
-Errors: 0
-Skipped: 0
+Tests: 78
+Execution should be verified locally with `mvn clean test`.
 ```
 
 Coverage includes:
@@ -308,7 +298,6 @@ Coverage includes:
 - Validation and structured errors
 - SQL-injection-style and XSS-style input
 - End-to-end integration flows
-- Application-instance headers
 
 ### Static Analysis
 
@@ -399,15 +388,10 @@ Complete macOS, Linux, and Windows instructions are available in
 - Runnable URL Shortener service and browser interface
 - Long URL shortening with seven-character Base62 codes
 - Direct HTTP redirects to original URLs
-- Aggregate and detailed analytics
+- Detailed analytics dashboard
 - Optional expiration, custom aliases, and soft-delete
 - Manage Links table with edit, disable, and permanent delete actions
 - Validation and structured error handling
-- H2 local and standalone execution
+- H2 local execution
 - File-backed H2 persistence
 - Local setup and testing documentation
-
-
-## Author 
-
-Aditi Verma

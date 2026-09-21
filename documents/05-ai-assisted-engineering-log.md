@@ -53,14 +53,11 @@ The update request validates HTTP/HTTPS URLs and future expiration timestamps.
 
 ## Verification
 
-The final Maven run completed with:
+The current source inventory contains 78 JUnit test methods. Run the suite
+locally with `mvn clean test` to verify execution after cleanup:
 
 ```text
-Tests run: 82
-Failures: 0
-Errors: 0
-Skipped: 0
-BUILD SUCCESS
+Tests run: 78
 ```
 
 Coverage includes service mapping and mutation behavior, MockMvc endpoint

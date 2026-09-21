@@ -31,7 +31,7 @@ public class UrlShortenerService {
     private static final Logger log = LoggerFactory.getLogger(UrlShortenerService.class);
     private static final int MAX_GENERATION_ATTEMPTS = 5;
     private static final Set<String> RESERVED_ALIASES = Set.of(
-            "api", "actuator", "health", "admin", "login", "logout", "docs", "swagger");
+            "api", "admin", "login", "logout", "docs", "swagger");
 
     private final ShortUrlRepository shortUrlRepository;
     private final ShortCodeGenerator shortCodeGenerator;
