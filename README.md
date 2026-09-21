@@ -169,15 +169,6 @@ GET /{shortCode}
 Successful resolution returns HTTP `302 Found` with the original URL in the
 `Location` header.
 
-### Aggregate Analytics
-
-```http
-GET /api/v1/urls/{shortCode}/analytics
-```
-
-Returns link metadata, click count, creation time, last-accessed time, active
-state, and expiration.
-
 ### Detailed Click Analytics
 
 ```http
@@ -280,7 +271,7 @@ Final approval
 ### Greenfield
 
 The first version established URL creation, redirects, H2 persistence,
-validation, Base62 generation, and aggregate analytics.
+validation, Base62 generation, and link analytics.
 
 ### Brownfield
 
@@ -311,7 +302,7 @@ Coverage includes:
 - Expiration
 - Custom aliases
 - Soft-delete (deactivation) and its interaction with redirects
-- Aggregate and detailed analytics
+- Detailed analytics dashboard
 - H2-backed persistence and analytics
 - Browser detection
 - Validation and structured errors
@@ -332,7 +323,7 @@ Neither baseline has been remediated yet — see Future Scope below.
 - **Base62 instead of UUIDs:** shorter public URLs, with collision checks and
   bounded retries.
 - **File-backed H2:** simple persistence without external services.
-- **Synchronous aggregate analytics:** immediate count consistency, with one
+- **Synchronous click counting:** immediate count consistency, with one
   database write per successful redirect.
 - **Asynchronous detailed analytics:** protects redirect reliability, with
   brief eventual consistency.
@@ -350,7 +341,7 @@ actual requirements at this stage:
   or OAuth2 (e.g. Keycloak or an external IdP) to authenticate API clients
   and gate mutating endpoints.
 - **User ownership** — add a `users` table and an `ownerId` foreign key on
-  `ShortUrl`, scoping create/read/analytics endpoints to the authenticated
+   `ShortUrl`, scoping create/read/link-analytics endpoints to the authenticated
   user.
 - **Rate limiting and abuse prevention** — protect the create and redirect
   endpoints from high-volume or malicious traffic.

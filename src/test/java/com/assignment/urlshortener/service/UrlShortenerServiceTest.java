@@ -4,7 +4,6 @@ import com.assignment.urlshortener.dto.CreateShortUrlRequest;
 import com.assignment.urlshortener.dto.CreateShortUrlResponse;
 import com.assignment.urlshortener.dto.ManagedUrlResponse;
 import com.assignment.urlshortener.dto.UpdateShortUrlRequest;
-import com.assignment.urlshortener.dto.UrlAnalyticsResponse;
 import com.assignment.urlshortener.entity.ShortUrl;
 import com.assignment.urlshortener.exception.CustomAliasConflictException;
 import com.assignment.urlshortener.exception.ShortCodeGenerationException;
@@ -29,7 +28,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -148,39 +146,6 @@ class UrlShortenerServiceTest {
 
         assertThrows(CustomAliasConflictException.class, () -> urlShortenerService.createShortUrl(
                 new CreateShortUrlRequest("https://example.com/race", null, "race-alias")));
-    }
-
-    @Test
-    void getAnalyticsThrowsWhenShortCodeUnknown() {
-        when(shortUrlRepository.findByShortCode("missing")).thenReturn(Optional.empty());
-
-        assertThrows(ShortUrlNotFoundException.class, () -> urlShortenerService.getAnalytics("missing"));
-    }
-
-    @Test
-    void getAnalyticsMapsShortUrlFields() {
-        ShortUrl shortUrl = mock(ShortUrl.class);
-        Instant createdAt = Instant.parse("2026-01-01T00:00:00Z");
-        Instant lastAccessedAt = Instant.parse("2026-01-02T00:00:00Z");
-        Instant expiresAt = Instant.parse("2026-02-01T00:00:00Z");
-        when(shortUrl.getShortCode()).thenReturn("abc1234");
-        when(shortUrl.getOriginalUrl()).thenReturn("https://example.com/page");
-        when(shortUrl.getClickCount()).thenReturn(5L);
-        when(shortUrl.getCreatedAt()).thenReturn(createdAt);
-        when(shortUrl.getLastAccessedAt()).thenReturn(lastAccessedAt);
-        when(shortUrl.isActive()).thenReturn(true);
-        when(shortUrl.getExpiresAt()).thenReturn(expiresAt);
-        when(shortUrlRepository.findByShortCode("abc1234")).thenReturn(Optional.of(shortUrl));
-
-        UrlAnalyticsResponse response = urlShortenerService.getAnalytics("abc1234");
-
-        assertThat(response.shortCode()).isEqualTo("abc1234");
-        assertThat(response.originalUrl()).isEqualTo("https://example.com/page");
-        assertThat(response.clickCount()).isEqualTo(5L);
-        assertThat(response.createdAt()).isEqualTo(createdAt);
-        assertThat(response.lastAccessedAt()).isEqualTo(lastAccessedAt);
-        assertThat(response.active()).isTrue();
-        assertThat(response.expiresAt()).isEqualTo(expiresAt);
     }
 
     @Test

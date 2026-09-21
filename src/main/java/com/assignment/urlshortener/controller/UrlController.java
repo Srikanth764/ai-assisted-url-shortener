@@ -5,7 +5,6 @@ import com.assignment.urlshortener.dto.CreateShortUrlRequest;
 import com.assignment.urlshortener.dto.CreateShortUrlResponse;
 import com.assignment.urlshortener.dto.ManagedUrlResponse;
 import com.assignment.urlshortener.dto.UpdateShortUrlRequest;
-import com.assignment.urlshortener.dto.UrlAnalyticsResponse;
 import com.assignment.urlshortener.service.ClickAnalyticsService;
 import com.assignment.urlshortener.service.UrlShortenerService;
 import jakarta.validation.Valid;
@@ -43,12 +42,6 @@ public class UrlController {
     @GetMapping
     public ResponseEntity<List<ManagedUrlResponse>> getManagedUrls() {
         return ResponseEntity.ok(urlShortenerService.getManagedUrls());
-    }
-
-    @GetMapping("/{shortCode}/analytics")
-    public ResponseEntity<UrlAnalyticsResponse> getAnalytics(@PathVariable String shortCode) {
-        UrlAnalyticsResponse response = urlShortenerService.getAnalytics(shortCode);
-        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/{shortCode}/click-analytics")

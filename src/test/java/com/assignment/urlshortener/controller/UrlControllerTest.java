@@ -108,14 +108,6 @@ class UrlControllerTest {
     }
 
     @Test
-    void getAnalyticsWithUnknownShortCodeReturnsNotFound() throws Exception {
-        when(urlShortenerService.getAnalytics(anyString())).thenThrow(new ShortUrlNotFoundException("missing"));
-
-        mockMvc.perform(get("/api/v1/urls/{shortCode}/analytics", "missing"))
-                .andExpect(status().isNotFound());
-    }
-
-    @Test
     void createShortUrlWithMalformedExpiresAtReturnsBadRequestNotServerError() throws Exception {
         mockMvc.perform(post("/api/v1/urls")
                         .contentType(MediaType.APPLICATION_JSON)

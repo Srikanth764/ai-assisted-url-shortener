@@ -55,17 +55,10 @@ class UrlShortenerIntegrationTest {
                 .andExpect(status().isFound())
                 .andExpect(header().string(HttpHeaders.LOCATION, originalUrl));
 
-        mockMvc.perform(get("/api/v1/urls/{shortCode}/analytics", shortCode))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.clickCount").value(1));
-
         mockMvc.perform(get("/{shortCode}", shortCode))
                 .andExpect(status().isFound())
                 .andExpect(header().string(HttpHeaders.LOCATION, originalUrl));
 
-        mockMvc.perform(get("/api/v1/urls/{shortCode}/analytics", shortCode))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.clickCount").value(2));
     }
 
     @Test
@@ -164,10 +157,6 @@ class UrlShortenerIntegrationTest {
         mockMvc.perform(get("/{shortCode}", "exp0001"))
                 .andExpect(status().isGone());
 
-        mockMvc.perform(get("/api/v1/urls/{shortCode}/analytics", "exp0001"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.clickCount").value(0))
-                .andExpect(jsonPath("$.expiresAt").exists());
     }
 
     @Test

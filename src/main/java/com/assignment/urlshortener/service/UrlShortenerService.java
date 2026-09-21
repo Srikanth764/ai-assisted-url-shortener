@@ -4,7 +4,6 @@ import com.assignment.urlshortener.dto.CreateShortUrlRequest;
 import com.assignment.urlshortener.dto.CreateShortUrlResponse;
 import com.assignment.urlshortener.dto.ManagedUrlResponse;
 import com.assignment.urlshortener.dto.UpdateShortUrlRequest;
-import com.assignment.urlshortener.dto.UrlAnalyticsResponse;
 import com.assignment.urlshortener.entity.ShortUrl;
 import com.assignment.urlshortener.exception.CustomAliasConflictException;
 import com.assignment.urlshortener.exception.ShortCodeGenerationException;
@@ -85,25 +84,6 @@ public class UrlShortenerService {
 
         shortUrlRepository.incrementClickCount(shortCode, Instant.now());
         return shortUrl.getOriginalUrl();
-    }
-
-    @Transactional(readOnly = true)
-    public UrlAnalyticsResponse getAnalytics(String shortCode) {
-        ShortUrl shortUrl = shortUrlRepository.findByShortCode(shortCode)
-                .orElseThrow(() -> {
-                    log.warn("Short code not found: {}", shortCode);
-                    return new ShortUrlNotFoundException(shortCode);
-                });
-
-        return new UrlAnalyticsResponse(
-                shortUrl.getShortCode(),
-                shortUrl.getOriginalUrl(),
-                shortUrl.getClickCount(),
-                shortUrl.getCreatedAt(),
-                shortUrl.getLastAccessedAt(),
-                shortUrl.isActive(),
-                shortUrl.getExpiresAt()
-        );
     }
 
         @Transactional(readOnly = true)
