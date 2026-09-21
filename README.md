@@ -131,7 +131,7 @@ Return HTTP 302 redirect
 | Validation | Jakarta Validation |
 | Monitoring | Spring Boot Actuator |
 | Testing | JUnit 5, Mockito, MockMvc, integration tests |
-| Build and deployment | Maven Wrapper |
+| Build and deployment | Apache Maven |
 
 ## API Reference
 
@@ -388,8 +388,6 @@ url-shortener/
 ├── src/test/java/com/assignment/urlshortener/
 ├── documents/
 ├── pom.xml
-├── mvnw
-├── mvnw.cmd
 └── README.md
 ```
 

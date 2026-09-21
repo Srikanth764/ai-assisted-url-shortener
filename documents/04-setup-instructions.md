@@ -9,8 +9,7 @@ required.
 - Java 17 or newer
 - Git
 
-The Maven Wrapper is included, so Maven does not need to be installed
-separately.
+Apache Maven must be installed and available on your `PATH`.
 
 ## Clone and Run
 
@@ -22,13 +21,13 @@ cd <your-repository>
 macOS/Linux:
 
 ```bash
-./mvnw spring-boot:run
+mvn spring-boot:run
 ```
 
 Windows PowerShell:
 
 ```powershell
-.\mvnw.cmd spring-boot:run
+mvn spring-boot:run
 ```
 
 The application is available at:
@@ -46,13 +45,13 @@ H2 files.
 macOS/Linux:
 
 ```bash
-./mvnw clean test
+mvn clean test
 ```
 
 Windows PowerShell:
 
 ```powershell
-.\mvnw.cmd clean test
+mvn clean test
 ```
 
 ## Health Check
